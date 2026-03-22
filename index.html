@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2D Shape LERP Tool</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
+        canvas { background: #fff; border: 5px solid #555; cursor: crosshair; }
+        .controls { margin-top: 10px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <h2>2D Shape Morphing (LERP)</h2>
+    <canvas id="mc" width="600" height="400"></canvas>
+    <div class="controls">
+        <p id="status">Status: Draw Shape A (Left Click). Press Enter when done.</p>
+        <p>Enter: Finish Shape | Space: Toggle Animation | R: Reset</p>
+    </div>
+
+<script>
+    const canvas = document.getElementById('mc');
+    const ctx = canvas.getContext('2d');
+    const status = document.getElementById('status');
+
+    let shapeA = [], shapeB = [];
+    let isAComplete = false, isBComplete = false;
+    let isAnimating = false;
+    let t = 0, speed = 0.01, direction = 1;
+
+    // --- PART A: THE LERP ROUTINE ---
+    function lerp(start, end, t) {
+        return start * (1 - t) + end * t;
+    }
+
+    function getTweenedShape(t) {
+        let tweened = [];
+        for (let i = 0; i < shapeA.length; i++) {
+            tweened.push({
+                x: lerp(shapeA[i].x, shapeB[i].x, t),
+                y: lerp(shapeA[i].y, shapeB[i].y, t)
+            });
+        }
+        return tweened;
+    }
+
+    // --- DRAWING LOGIC ---
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (isAnimating) {
+            renderShape(getTweenedShape(t), "#e74c3c", true);
+            updateAnimation();
+        } else {
+            if (shapeA.length > 0) renderShape(shapeA, "#3498db", isAComplete);
+            if (shapeB.length > 0) renderShape(shapeB, "#2ecc71", isBComplete);
+        }
+        requestAnimationFrame(draw);
+    }
+
+    function renderShape(points, color, closed) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        if (closed) ctx.closePath();
+        ctx.stroke();
+        // Draw vertices
+        points.forEach(p => {
+            ctx.fillStyle = color;
+            ctx.fillRect(p.x-3, p.y-3, 6, 6);
+        });
+    }
+
+    // --- PART B & C: ANIMATION LOOP ---
+    function updateAnimation() {
+        t += speed * direction;
+        if (t >= 1 || t <= 0) direction *= -1; // Ping-pong logic
+    }
+
+    // --- INTERACTION ---
+    canvas.addEventListener('mousedown', (e) => {
+        if (isAnimating) return;
+        const rect = canvas.getBoundingClientRect();
+        const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+        if (!isAComplete) shapeA.push(pt);
+        else if (!isBComplete && shapeB.length < shapeA.length) shapeB.push(pt);
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "Enter") {
+            if (!isAComplete) {
+                isAComplete = true;
+                status.innerText = `Shape A done (${shapeA.length} pts). Draw Shape B (Need ${shapeA.length} pts).`;
+            } else if (!isBComplete && shapeB.length === shapeA.length) {
+                isBComplete = true;
+                status.innerText = "Both Shapes Complete! Press Space to Animate.";
+            }
+        }
+        if (e.code === "Space" && isBComplete) isAnimating = !isAnimating;
+        if (e.key === "r") location.reload();
+    });
+
+    draw(); // Start the loop
+</script>
+</body>
+</html>
