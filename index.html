@@ -3,105 +3,121 @@
 <head>
     <title>2D Shape LERP Tool</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
-        canvas { background: #fff; border: 5px solid #555; cursor: crosshair; }
-        .controls { margin-top: 10px; color: #aaa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #1a1a1a; color: #eee; margin: 0; padding: 20px; }
+        canvas { background: #ffffff; border: 4px solid #333; border-radius: 8px; cursor: crosshair; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .ui-panel { margin-top: 15px; padding: 15px; background: #2a2a2a; display: inline-block; border-radius: 10px; min-width: 500px; }
+        .status-bar { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; color: #3498db; }
+        .counter { font-family: monospace; background: #000; padding: 2px 8px; border-radius: 4px; color: #2ecc71; }
+        .hint { font-size: 0.9em; color: #888; margin-top: 10px; }
+        kbd { background: #444; padding: 2px 5px; border-radius: 3px; border: 1px solid #666; font-family: monospace; }
     </style>
 </head>
 <body>
-    <h2>2D Shape Morphing (LERP)</h2>
-    <canvas id="mc" width="600" height="400"></canvas>
-    <div class="controls">
-        <p id="status">Status: Draw Shape A (Left Click). Press Enter when done.</p>
-        <p>Enter: Finish Shape | Space: Toggle Animation | R: Reset</p>
+    <h2>HCI/CG: Shape Morphing Lab</h2>
+    <div class="ui-panel">
+        <div id="status" class="status-bar">Step 1: Draw Shape A</div>
+        <div id="counts">Points: <span id="curCount" class="counter">0</span></div>
+        
+        <canvas id="mc" width="600" height="400"></canvas>
+        
+        <div class="hint">
+            <kbd>Enter</kbd> Finish Shape | <kbd>Space</kbd> Toggle Morph | <kbd>R</kbd> Reset
+        </div>
     </div>
 
 <script>
     const canvas = document.getElementById('mc');
     const ctx = canvas.getContext('2d');
-    const status = document.getElementById('status');
+    const statusTxt = document.getElementById('status');
+    const countTxt = document.getElementById('curCount');
 
     let shapeA = [], shapeB = [];
-    let isAComplete = false, isBComplete = false;
-    let isAnimating = false;
-    let t = 0, speed = 0.01, direction = 1;
+    let isAComplete = false, isBComplete = false, isAnimating = false;
+    let t = 0, speed = 0.008, direction = 1;
 
-    // --- PART A: THE LERP ROUTINE ---
-    function lerp(start, end, t) {
-        return start * (1 - t) + end * t;
-    }
+    // --- MATH ---
+    const lerp = (start, end, t) => start * (1 - t) + end * t;
 
     function getTweenedShape(t) {
-        let tweened = [];
-        for (let i = 0; i < shapeA.length; i++) {
-            tweened.push({
-                x: lerp(shapeA[i].x, shapeB[i].x, t),
-                y: lerp(shapeA[i].y, shapeB[i].y, t)
-            });
-        }
-        return tweened;
+        return shapeA.map((pt, i) => ({
+            x: lerp(pt.x, shapeB[i].x, t),
+            y: lerp(pt.y, shapeB[i].y, t)
+        }));
     }
 
-    // --- DRAWING LOGIC ---
+    // --- RENDER ---
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         if (isAnimating) {
-            renderShape(getTweenedShape(t), "#e74c3c", true);
-            updateAnimation();
+            renderPoly(getTweenedShape(t), "#e74c3c", true);
+            t += speed * direction;
+            if (t >= 1 || t <= 0) direction *= -1;
         } else {
-            if (shapeA.length > 0) renderShape(shapeA, "#3498db", isAComplete);
-            if (shapeB.length > 0) renderShape(shapeB, "#2ecc71", isBComplete);
+            if (shapeA.length > 0) renderPoly(shapeA, "#3498db", isAComplete);
+            if (shapeB.length > 0) renderPoly(shapeB, "#2ecc71", isBComplete);
         }
         requestAnimationFrame(draw);
     }
 
-    function renderShape(points, color, closed) {
+    function renderPoly(points, color, closed) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
+        ctx.setLineDash(isAnimating ? [] : [5, 5]); // Dashed line while drawing
+        if (isAnimating || closed) ctx.setLineDash([]);
+
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
         if (closed) ctx.closePath();
         ctx.stroke();
-        // Draw vertices
+
         points.forEach(p => {
             ctx.fillStyle = color;
-            ctx.fillRect(p.x-3, p.y-3, 6, 6);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fill();
         });
     }
 
-    // --- PART B & C: ANIMATION LOOP ---
-    function updateAnimation() {
-        t += speed * direction;
-        if (t >= 1 || t <= 0) direction *= -1; // Ping-pong logic
-    }
-
-    // --- INTERACTION ---
+    // --- INPUT ---
     canvas.addEventListener('mousedown', (e) => {
         if (isAnimating) return;
         const rect = canvas.getBoundingClientRect();
         const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
-        if (!isAComplete) shapeA.push(pt);
-        else if (!isBComplete && shapeB.length < shapeA.length) shapeB.push(pt);
+        if (!isAComplete) {
+            shapeA.push(pt);
+            countTxt.innerText = shapeA.length;
+        } else if (!isBComplete && shapeB.length < shapeA.length) {
+            shapeB.push(pt);
+            countTxt.innerText = `${shapeB.length} / ${shapeA.length}`;
+            if (shapeB.length === shapeA.length) {
+                statusTxt.innerText = "Shape B Matched! Press Enter to Lock.";
+                statusTxt.style.color = "#2ecc71";
+            }
+        }
     });
 
     window.addEventListener('keydown', (e) => {
         if (e.key === "Enter") {
-            if (!isAComplete) {
+            if (!isAComplete && shapeA.length > 2) {
                 isAComplete = true;
-                status.innerText = `Shape A done (${shapeA.length} pts). Draw Shape B (Need ${shapeA.length} pts).`;
+                statusTxt.innerText = `Step 2: Draw Shape B (${shapeA.length} points)`;
+                countTxt.innerText = `0 / ${shapeA.length}`;
             } else if (!isBComplete && shapeB.length === shapeA.length) {
                 isBComplete = true;
-                status.innerText = "Both Shapes Complete! Press Space to Animate.";
+                statusTxt.innerText = "Ready! Press Space to Animate";
             }
         }
-        if (e.code === "Space" && isBComplete) isAnimating = !isAnimating;
+        if (e.code === "Space" && isBComplete) {
+            isAnimating = !isAnimating;
+            statusTxt.innerText = isAnimating ? "Animating: Morphing A ↔ B" : "Animation Paused";
+        }
         if (e.key === "r") location.reload();
     });
 
-    draw(); // Start the loop
+    draw();
 </script>
 </body>
 </html>
